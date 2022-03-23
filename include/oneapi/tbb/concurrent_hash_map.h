@@ -1091,6 +1091,34 @@ public:
     // concurrent map operations
     //------------------------------------------------------------------------
 
+    Key get_sample_key() {
+        int i, j, count;
+        sample:
+        std::random_device dev;
+        std::mt19937 rng(dev());
+        hashcode_type m = this->my_mask.load(std::memory_order_acquire);
+        std::uniform_int_distribution<std::mt19937::result_type> distm(0, m);
+        i = distm(rng);
+        bucket_accessor b( this, i & m );
+        node *n = static_cast<node*>( (b())->node_list.load(std::memory_order_relaxed) );
+        count = 0;
+        while( this->is_valid(n)){
+            count ++;
+            n = static_cast<node*>( n->next );
+        }
+        if(count == 0) goto sample;
+        std::uniform_int_distribution<std::mt19937::result_type> dist_node(0, count - 1);
+        j = dist_node(rng);
+        n = static_cast<node*>( (b())->node_list.load(std::memory_order_relaxed) );
+        i = 0;
+        while(i < j) {
+            n = static_cast<node*>( n->next );
+            i ++;
+        }
+            
+        return n->value().first;
+    }
+    
     // Return count of items (0 or 1)
     size_type count( const Key &key ) const {
         return const_cast<concurrent_hash_map*>(this)->lookup</*insert*/false>(key, nullptr, nullptr, /*write=*/false, &do_not_allocate_node);
