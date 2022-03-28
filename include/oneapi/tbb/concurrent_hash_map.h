@@ -28,6 +28,8 @@
 #include "tbb_allocator.h"
 #include "spin_rw_mutex.h"
 
+#include <random>
+
 #include <atomic>
 #include <initializer_list>
 #include <tuple>
@@ -1091,31 +1093,24 @@ public:
     // concurrent map operations
     //------------------------------------------------------------------------
 
-    Key get_sample_key() {
+    Key get_sample_key(int x) {
         int i, j, count;
-        sample:
-        std::random_device dev;
-        std::mt19937 rng(dev());
-        hashcode_type m = this->my_mask.load(std::memory_order_acquire);
-        std::uniform_int_distribution<std::mt19937::result_type> distm(0, m);
-        i = distm(rng);
-        bucket_accessor b( this, i & m );
+        hashcode_type m = this->my_mask.load(std::memory_order_relaxed);
+        bucket_accessor b( this, x & m );
         node *n = static_cast<node*>( (b())->node_list.load(std::memory_order_relaxed) );
         count = 0;
         while( this->is_valid(n)){
             count ++;
             n = static_cast<node*>( n->next );
         }
-        if(count == 0) goto sample;
-        std::uniform_int_distribution<std::mt19937::result_type> dist_node(0, count - 1);
-        j = dist_node(rng);
+        if(count == 0) return (Key)0;
         n = static_cast<node*>( (b())->node_list.load(std::memory_order_relaxed) );
         i = 0;
+        j = x % count;
         while(i < j) {
             n = static_cast<node*>( n->next );
             i ++;
-        }
-            
+        }  
         return n->value().first;
     }
     
